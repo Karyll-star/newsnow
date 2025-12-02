@@ -43,6 +43,10 @@ if (process.env.VERCEL) {
   // }
 } else if (process.env.CF_PAGES) {
   nitroOption.preset = "cloudflare-pages"
+  nitroOption.alias = {
+    ...nitroOption.alias,
+    undici: join(projectDir, "server/mocks/undici.ts"),
+  }
   nitroOption.unenv = {
     alias: {
       "safer-buffer": "node:buffer",
