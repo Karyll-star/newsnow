@@ -1,4 +1,9 @@
+import process from "node:process"
 import { $fetch } from "ofetch"
+import { ProxyAgent } from "undici"
+
+const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
+const dispatcher = proxy ? new ProxyAgent(proxy) : undefined
 
 export const myFetch = $fetch.create({
   headers: {
@@ -6,4 +11,5 @@ export const myFetch = $fetch.create({
   },
   timeout: 10000,
   retry: 3,
+  dispatcher,
 })
