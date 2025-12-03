@@ -1,10 +1,13 @@
-import type { SourceID } from "@shared/types"
+import type { SourceID, SourceResponse } from "@shared/types"
 import pinyin from "@shared/pinyin.json"
-import { useMemo } from "react"
+import { useMemo, useRef } from "react"
 import { sources } from "@shared/sources"
 import { columns } from "@shared/metadata"
 import { typeSafeObjectEntries } from "@shared/type.util"
 import { clsx as $ } from "clsx"
+import { useQuery } from "@tanstack/react-query"
+import { useInView } from "framer-motion"
+import { myFetch } from "~/utils"
 import { useFocusWith } from "~/hooks/useFocus"
 
 interface SourceItemProps {
@@ -86,15 +89,27 @@ export function SourceDashboard() {
 
 function NewspaperCard({ item }: { item: SourceItemProps }) {
   const { isFocused, toggleFocus } = useFocusWith(item.id)
+  const ref = useRef<HTMLDivElement>(null)
+  const isInView = useInView(ref, { once: true, margin: "200px" })
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["source", item.id, "preview"],
+    queryFn: async () => {
+      const res = await myFetch<SourceResponse>(`/s?id=${item.id}`)
+      return res
+    },
+    enabled: isInView,
+    staleTime: 1000 * 60 * 5, // 5 mins
+  })
 
   return (
-    <div className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:-rotate-1">
+    <div ref={ref} className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:-rotate-1">
       {/* Scotch Tape */}
       <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-10 bg-white/20 backdrop-blur-[1px] rotate-[-5deg] z-20 shadow-sm border-l border-r border-white/10 pointer-events-none" />
 
       {/* Paper Body */}
-      <div className="relative bg-[#e8e6e1] text-neutral-900 p-4 shadow-lg shadow-black/40 min-h-[100px] flex flex-col justify-between">
-        {/* Jagged Bottom Edge Simulation (Simplified via mask or css) - For now using a simple rough border look via shadow/clip implies it */}
+      <div className="relative bg-[#e8e6e1] text-neutral-900 p-4 shadow-lg shadow-black/40 min-h-[220px] flex flex-col">
+        {/* Jagged Bottom Edge Simulation */}
         <div
           className="absolute bottom-0 left-0 w-full h-[4px] bg-[#e8e6e1]"
           style={{
@@ -103,7 +118,7 @@ function NewspaperCard({ item }: { item: SourceItemProps }) {
           }}
         />
 
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex flex-col">
             {/* Marker Highlight */}
             <span className="relative inline-block mb-1">
@@ -126,11 +141,38 @@ function NewspaperCard({ item }: { item: SourceItemProps }) {
           </button>
         </div>
 
-        {/* Fake Text Lines for "Content" */}
-        <div className="mt-3 space-y-1 opacity-40 pointer-events-none">
-          <div className="h-1 bg-neutral-800 w-full rounded-[1px]" />
-          <div className="h-1 bg-neutral-800 w-[90%] rounded-[1px]" />
-          <div className="h-1 bg-neutral-800 w-[60%] rounded-[1px]" />
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          {isLoading
+            ? (
+                <div className="space-y-2 opacity-40 animate-pulse">
+                  <div className="h-2 bg-neutral-800 w-full rounded-[1px]" />
+                  <div className="h-2 bg-neutral-800 w-[90%] rounded-[1px]" />
+                  <div className="h-2 bg-neutral-800 w-[70%] rounded-[1px]" />
+                  <div className="h-2 bg-neutral-800 w-[80%] rounded-[1px]" />
+                </div>
+              )
+            : isError
+              ? (
+                  <div className="text-xs text-red-800/60 font-serif italic text-center mt-4">Unable to retrieve evidence.</div>
+                )
+              : (
+                  <ul className="space-y-2">
+                    {data?.items?.slice(0, 5).map(news => (
+                      <li key={news.id} className="text-xs font-serif leading-snug group/item">
+                        <span className="text-neutral-400 mr-1">-</span>
+                        <a
+                          href={news.mobileUrl || news.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hover:underline hover:text-red-900 decoration-red-900/30 decoration-1 underline-offset-2 transition-colors"
+                        >
+                          {news.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
         </div>
       </div>
     </div>
@@ -139,11 +181,25 @@ function NewspaperCard({ item }: { item: SourceItemProps }) {
 
 function InstaxCard({ item }: { item: SourceItemProps }) {
   const { isFocused, toggleFocus } = useFocusWith(item.id)
+  const ref = useRef<HTMLDivElement>(null)
+  const isInView = useInView(ref, { once: true, margin: "200px" })
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["source", item.id, "preview"],
+    queryFn: async () => {
+      const res = await myFetch<SourceResponse>(`/s?id=${item.id}`)
+      return res
+    },
+    enabled: isInView,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const topNews = data?.items?.[0]
 
   return (
-    <div className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:rotate-1">
+    <div ref={ref} className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:rotate-1">
       {/* Instax Body */}
-      <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden">
+      <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden flex flex-col h-full">
         {/* Glossy Overlay */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
 
@@ -156,10 +212,23 @@ function InstaxCard({ item }: { item: SourceItemProps }) {
           <div className="absolute inset-0 bg-black/20" />
           {" "}
           {/* Dimmer */}
+
+          {/* Breaking News Overlay (If available) */}
+          {topNews && (
+            <div className="absolute bottom-0 left-0 w-full p-2 bg-gradient-to-t from-black/90 to-transparent text-white">
+              <a href={topNews.mobileUrl || topNews.url} target="_blank" rel="noreferrer" className="block text-[10px] leading-tight font-sans hover:underline hover:text-yellow-300 line-clamp-3">
+                {topNews.title}
+              </a>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="absolute bottom-2 left-2 right-2 h-1 bg-white/20 animate-pulse rounded" />
+          )}
         </div>
 
         {/* Dymo Label */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[90%] flex justify-center">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[90%] flex justify-center z-20">
           <div className="bg-black text-white px-2 py-0.5 font-mono text-xs tracking-widest uppercase rounded-[2px] shadow-sm transform -rotate-1 border border-white/20 truncate text-center">
             {item.name}
           </div>
