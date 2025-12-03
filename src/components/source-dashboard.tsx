@@ -51,50 +51,132 @@ export function SourceDashboard() {
   )
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto animate-fade-in">
-      {sourceItems.map(({ column, sources }) => (
-        <div key={column} className="mb-10">
-          <h2 className="text-xl font-bold mb-4 opacity-70 flex items-center gap-2">
-            <span className="i-ph-hash-duotone" />
-            {column}
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {sources.map(item => (
-              <SourceCard key={item.id} item={item} />
-            ))}
+    <div className="min-h-screen w-full bg-[#222] text-[#e0e0e0] font-sans p-4 md:p-8 relative overflow-hidden">
+      {/* Cement Wall Texture Simulation */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-20 z-0"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      {/* Top Spot Light */}
+      <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(0,0,0,0.95))]" />
+
+      <div className="max-w-7xl mx-auto relative z-10 animate-fade-in">
+        {sourceItems.map(({ column, sources }) => (
+          <div key={column} className="mb-16">
+            <h2 className="text-2xl font-bold mb-6 text-neutral-400/80 tracking-widest uppercase flex items-center gap-3 border-b border-white/10 pb-2">
+              <span className="i-ph-hash-duotone" />
+              {column}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 md:gap-8">
+              {sources.map(item => (
+                column === "科技"
+                  ? <InstaxCard key={item.id} item={item} />
+                  : <NewspaperCard key={item.id} item={item} />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
 
-function SourceCard({ item }: { item: SourceItemProps }) {
+function NewspaperCard({ item }: { item: SourceItemProps }) {
   const { isFocused, toggleFocus } = useFocusWith(item.id)
 
   return (
-    <div className="group relative flex items-center justify-between p-3 rounded-xl bg-base shadow-sm hover:shadow-md transition-all border border-transparent hover:border-primary/20 hover:translate-y--1">
-      <div className="flex items-center gap-3 overflow-hidden">
+    <div className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:-rotate-1">
+      {/* Scotch Tape */}
+      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-10 bg-white/20 backdrop-blur-[1px] rotate-[-5deg] z-20 shadow-sm border-l border-r border-white/10 pointer-events-none" />
+
+      {/* Paper Body */}
+      <div className="relative bg-[#e8e6e1] text-neutral-900 p-4 shadow-lg shadow-black/40 min-h-[100px] flex flex-col justify-between">
+        {/* Jagged Bottom Edge Simulation (Simplified via mask or css) - For now using a simple rough border look via shadow/clip implies it */}
         <div
-          className="w-10 h-10 rounded-lg bg-cover flex-shrink-0 shadow-sm"
-          style={{ backgroundImage: `url(/icons/${item.id.split("-")[0]}.png)` }}
+          className="absolute bottom-0 left-0 w-full h-[4px] bg-[#e8e6e1]"
+          style={{
+            clipPath: "polygon(0% 0%, 5% 100%, 10% 0%, 15% 100%, 20% 0%, 25% 100%, 30% 0%, 35% 100%, 40% 0%, 45% 100%, 50% 0%, 55% 100%, 60% 0%, 65% 100%, 70% 0%, 75% 100%, 80% 0%, 85% 100%, 90% 0%, 95% 100%, 100% 0%)",
+            transform: "translateY(99%)",
+          }}
         />
-        <div className="flex flex-col overflow-hidden">
-          <span className="font-bold text-sm truncate group-hover:text-primary transition-colors">{item.name}</span>
-          {item.title && <span className="text-xs text-neutral-400 truncate">{item.title}</span>}
+
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col">
+            {/* Marker Highlight */}
+            <span className="relative inline-block mb-1">
+              <span className="font-serif font-bold text-lg leading-tight relative z-10">{item.name}</span>
+              <span className={$("absolute bottom-1 left-0 w-full h-2 -z-0 opacity-40 -rotate-1 rounded-sm", `bg-${sources[item.id].color}-500`)} />
+            </span>
+            {item.title && <span className="text-xs font-serif text-neutral-600 italic leading-tight">{item.title}</span>}
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleFocus}
+            className={$(
+              "p-1 rounded-full transition-all",
+              isFocused ? "text-red-700 opacity-100 scale-110" : "text-neutral-400 opacity-0 group-hover:opacity-100 hover:text-red-700",
+            )}
+            title={isFocused ? "Remove from case" : "Add to case"}
+          >
+            <span className={$(isFocused ? "i-ph-push-pin-fill" : "i-ph-push-pin-duotone", "text-xl")} />
+          </button>
+        </div>
+
+        {/* Fake Text Lines for "Content" */}
+        <div className="mt-3 space-y-1 opacity-40 pointer-events-none">
+          <div className="h-1 bg-neutral-800 w-full rounded-[1px]" />
+          <div className="h-1 bg-neutral-800 w-[90%] rounded-[1px]" />
+          <div className="h-1 bg-neutral-800 w-[60%] rounded-[1px]" />
         </div>
       </div>
-      <button
-        type="button"
-        onClick={toggleFocus}
-        className={$(
-          "absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100",
-          isFocused ? "text-primary opacity-100" : "text-neutral-400 hover:text-primary hover:bg-primary/10",
-        )}
-        title={isFocused ? "取消关注" : "关注"}
-      >
-        <span className={$(isFocused ? "i-ph-star-fill" : "i-ph-star-duotone", "text-xl")} />
-      </button>
+    </div>
+  )
+}
+
+function InstaxCard({ item }: { item: SourceItemProps }) {
+  const { isFocused, toggleFocus } = useFocusWith(item.id)
+
+  return (
+    <div className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:rotate-1">
+      {/* Instax Body */}
+      <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden">
+        {/* Glossy Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
+
+        {/* Photo Area */}
+        <div className="bg-neutral-900 aspect-square w-full relative overflow-hidden mb-2 filter grayscale group-hover:grayscale-0 transition-all duration-500">
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-80"
+            style={{ backgroundImage: `url(/icons/${item.id.split("-")[0]}.png)` }}
+          />
+          <div className="absolute inset-0 bg-black/20" />
+          {" "}
+          {/* Dimmer */}
+        </div>
+
+        {/* Dymo Label */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[90%] flex justify-center">
+          <div className="bg-black text-white px-2 py-0.5 font-mono text-xs tracking-widest uppercase rounded-[2px] shadow-sm transform -rotate-1 border border-white/20 truncate text-center">
+            {item.name}
+          </div>
+        </div>
+
+        {/* Pin Action */}
+        <button
+          type="button"
+          onClick={toggleFocus}
+          className={$(
+            "absolute top-1 right-1 p-1 z-30 transition-all",
+            isFocused ? "text-yellow-400 opacity-100 drop-shadow-md" : "text-white opacity-0 group-hover:opacity-100 hover:text-yellow-300",
+          )}
+        >
+          <span className={$(isFocused ? "i-ph-star-fill" : "i-ph-star-duotone", "text-lg")} />
+        </button>
+      </div>
     </div>
   )
 }
