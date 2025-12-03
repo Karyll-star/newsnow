@@ -90,9 +90,17 @@ interface HotVideoRes {
 
 const hotSearch = defineSource(async () => {
   const url = "https://s.search.bilibili.com/main/hotword?limit=30"
-  const res: WapRes = await myFetch(url)
+  const res: WapRes = await myFetch(url, {
+    headers: {
+      Referer: "https://www.bilibili.com/",
+    },
+  })
 
-  return res.list.map(k => ({
+  if (res.code !== 0) {
+    throw new Error(`Bilibili hot search error: ${res.code}`)
+  }
+
+  return (res.list || []).map(k => ({
     id: k.keyword,
     title: k.show_name,
     url: `https://search.bilibili.com/all?keyword=${encodeURIComponent(k.keyword)}`,
@@ -106,7 +114,11 @@ const hotVideo = defineSource(async () => {
   const url = "https://api.bilibili.com/x/web-interface/popular"
   const res: HotVideoRes = await myFetch(url)
 
-  return res.data.list.map(video => ({
+  if (res.code !== 0) {
+    throw new Error(`Bilibili hot video error: ${res.message}`)
+  }
+
+  return (res.data?.list || []).map(video => ({
     id: video.bvid,
     title: video.title,
     url: `https://www.bilibili.com/video/${video.bvid}`,
@@ -123,7 +135,11 @@ const ranking = defineSource(async () => {
   const url = "https://api.bilibili.com/x/web-interface/ranking/v2"
   const res: HotVideoRes = await myFetch(url)
 
-  return res.data.list.map(video => ({
+  if (res.code !== 0) {
+    throw new Error(`Bilibili ranking error: ${res.message}`)
+  }
+
+  return (res.data?.list || []).map(video => ({
     id: video.bvid,
     title: video.title,
     url: `https://www.bilibili.com/video/${video.bvid}`,
