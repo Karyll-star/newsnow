@@ -96,11 +96,11 @@ const hotSearch = defineSource(async () => {
     },
   })
 
-  if (res.code !== 0) {
-    throw new Error(`Bilibili hot search error: ${res.code}`)
+  if (res.code !== 0 || !res.list) {
+    throw new Error("Failed to fetch bilibili hot search")
   }
 
-  return (res.list || []).map(k => ({
+  return res.list.map(k => ({
     id: k.keyword,
     title: k.show_name,
     url: `https://search.bilibili.com/all?keyword=${encodeURIComponent(k.keyword)}`,
@@ -114,11 +114,7 @@ const hotVideo = defineSource(async () => {
   const url = "https://api.bilibili.com/x/web-interface/popular"
   const res: HotVideoRes = await myFetch(url)
 
-  if (res.code !== 0) {
-    throw new Error(`Bilibili hot video error: ${res.message}`)
-  }
-
-  return (res.data?.list || []).map(video => ({
+  return res.data.list.map(video => ({
     id: video.bvid,
     title: video.title,
     url: `https://www.bilibili.com/video/${video.bvid}`,
@@ -135,11 +131,7 @@ const ranking = defineSource(async () => {
   const url = "https://api.bilibili.com/x/web-interface/ranking/v2"
   const res: HotVideoRes = await myFetch(url)
 
-  if (res.code !== 0) {
-    throw new Error(`Bilibili ranking error: ${res.message}`)
-  }
-
-  return (res.data?.list || []).map(video => ({
+  return res.data.list.map(video => ({
     id: video.bvid,
     title: video.title,
     url: `https://www.bilibili.com/video/${video.bvid}`,
