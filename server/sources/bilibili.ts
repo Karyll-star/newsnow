@@ -90,58 +90,103 @@ interface HotVideoRes {
 
 const hotSearch = defineSource(async () => {
   const url = "https://s.search.bilibili.com/main/hotword?limit=30"
-  const res: WapRes = await myFetch(url, {
-    headers: {
-      Referer: "https://www.bilibili.com/",
-    },
-  })
+  try {
+    const res: WapRes = await myFetch(url, {
+      headers: {
+        Referer: "https://www.bilibili.com/",
+      },
+    })
 
-  if (res.code !== 0 || !res.list) {
-    throw new Error("Failed to fetch bilibili hot search")
+    if (!res) {
+      throw new Error("Bilibili hot search response is empty")
+    }
+
+    if (res.code !== 0) {
+      throw new Error(`Bilibili hot search error code: ${res.code}`)
+    }
+
+    if (!res.list) {
+      // Sometimes list might be empty or null if no hotwords, but usually there are.
+      // Returning empty array is safer than crashing.
+      return []
+    }
+
+    return res.list.map(k => ({
+      id: k.keyword,
+      title: k.show_name,
+      url: `https://search.bilibili.com/all?keyword=${encodeURIComponent(k.keyword)}`,
+      extra: {
+        icon: k.icon && proxyPicture(k.icon),
+      },
+    }))
+  } catch (e) {
+    console.error("Error in bilibili hotSearch:", e)
+    throw e
   }
-
-  return res.list.map(k => ({
-    id: k.keyword,
-    title: k.show_name,
-    url: `https://search.bilibili.com/all?keyword=${encodeURIComponent(k.keyword)}`,
-    extra: {
-      icon: k.icon && proxyPicture(k.icon),
-    },
-  }))
 })
 
 const hotVideo = defineSource(async () => {
   const url = "https://api.bilibili.com/x/web-interface/popular"
-  const res: HotVideoRes = await myFetch(url)
+  try {
+    const res: HotVideoRes = await myFetch(url, {
+      headers: {
+        Referer: "https://www.bilibili.com/",
+      },
+    })
 
-  return res.data.list.map(video => ({
-    id: video.bvid,
-    title: video.title,
-    url: `https://www.bilibili.com/video/${video.bvid}`,
-    pubDate: video.pubdate * 1000,
-    extra: {
-      info: `${video.owner.name} · ${formatNumber(video.stat.view)}观看 · ${formatNumber(video.stat.like)}点赞`,
-      hover: video.desc,
-      icon: proxyPicture(video.pic),
-    },
-  }))
+    if (!res) throw new Error("Bilibili hot video response is empty")
+
+    if (res.code !== 0) {
+      throw new Error(`Bilibili hot video error: ${res.message}`)
+    }
+
+    return (res.data?.list || []).map(video => ({
+      id: video.bvid,
+      title: video.title,
+      url: `https://www.bilibili.com/video/${video.bvid}`,
+      pubDate: video.pubdate * 1000,
+      extra: {
+        info: `${video.owner.name} · ${formatNumber(video.stat.view)}观看 · ${formatNumber(video.stat.like)}点赞`,
+        hover: video.desc,
+        icon: proxyPicture(video.pic),
+      },
+    }))
+  } catch (e) {
+    console.error("Error in bilibili hotVideo:", e)
+    throw e
+  }
 })
 
 const ranking = defineSource(async () => {
   const url = "https://api.bilibili.com/x/web-interface/ranking/v2"
-  const res: HotVideoRes = await myFetch(url)
+  try {
+    const res: HotVideoRes = await myFetch(url, {
+      headers: {
+        Referer: "https://www.bilibili.com/",
+      },
+    })
 
-  return res.data.list.map(video => ({
-    id: video.bvid,
-    title: video.title,
-    url: `https://www.bilibili.com/video/${video.bvid}`,
-    pubDate: video.pubdate * 1000,
-    extra: {
-      info: `${video.owner.name} · ${formatNumber(video.stat.view)}观看 · ${formatNumber(video.stat.like)}点赞`,
-      hover: video.desc,
-      icon: proxyPicture(video.pic),
-    },
-  }))
+    if (!res) throw new Error("Bilibili ranking response is empty")
+
+    if (res.code !== 0) {
+      throw new Error(`Bilibili ranking error: ${res.message}`)
+    }
+
+    return (res.data?.list || []).map(video => ({
+      id: video.bvid,
+      title: video.title,
+      url: `https://www.bilibili.com/video/${video.bvid}`,
+      pubDate: video.pubdate * 1000,
+      extra: {
+        info: `${video.owner.name} · ${formatNumber(video.stat.view)}观看 · ${formatNumber(video.stat.like)}点赞`,
+        hover: video.desc,
+        icon: proxyPicture(video.pic),
+      },
+    }))
+  } catch (e) {
+    console.error("Error in bilibili ranking:", e)
+    throw e
+  }
 })
 
 function formatNumber(num: number): string {
