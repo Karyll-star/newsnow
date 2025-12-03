@@ -15,6 +15,7 @@ export default defineSource(async () => {
   const res: Res = await myFetch(url, {
     headers: {
       cookie: cookie.join("; "),
+      Referer: "https://www.douyin.com/",
     },
   })
   return res.data.word_list.map((k) => {
