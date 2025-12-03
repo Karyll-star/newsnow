@@ -38,6 +38,24 @@ function groupByColumn(items: SourceItemProps[]) {
   })
 }
 
+function getRandomStyle(id: string) {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  }
+
+  // Deterministic random values
+  const rotate = (hash % 10) - 5 // -5 to 4 deg
+  const x = (hash % 16) - 8 // -8 to 7 px
+  const y = (hash % 16) - 8 // -8 to 7 px
+
+  return {
+    "--random-rotate": `${rotate}deg`,
+    "--random-x": `${x}px`,
+    "--random-y": `${y}px`,
+  } as React.CSSProperties
+}
+
 export function SourceDashboard() {
   const sourceItems = useMemo(
     () =>
@@ -54,17 +72,62 @@ export function SourceDashboard() {
   )
 
   return (
-    <div className="min-h-screen w-full bg-[#222] text-[#e0e0e0] font-sans p-4 md:p-8 relative overflow-hidden">
-      {/* Cement Wall Texture Simulation */}
+    <div className="min-h-screen w-full bg-[#1a1a1a] text-[#e0e0e0] font-sans p-4 md:p-8 relative overflow-hidden perspective-1000">
+      <style>
+        {`
+        @keyframes fogDrift {
+          0% { transform: translate3d(0, 0, 0); opacity: 0.4; }
+          50% { transform: translate3d(-2%, -1%, 0); opacity: 0.6; }
+          100% { transform: translate3d(2%, 1%, 0); opacity: 0.4; }
+        }
+        @keyframes grainFlicker {
+          0%, 100% { transform: translate(0,0); }
+          10% { transform: translate(-1%, -1%); }
+          20% { transform: translate(1%, 1%); }
+          30% { transform: translate(-2%, 2%); }
+          40% { transform: translate(2%, -2%); }
+          50% { transform: translate(-1%, 2%); }
+          60% { transform: translate(1%, -2%); }
+          70% { transform: translate(2%, 1%); }
+          80% { transform: translate(-2%, -1%); }
+          90% { transform: translate(1%, -1%); }
+        }
+      `}
+      </style>
+
+      {/* 1. Cinematic Grain Layer (Highest freq noise + animation) */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-20 z-0"
+        className="fixed inset-[-50%] w-[200%] h-[200%] pointer-events-none z-50 mix-blend-overlay opacity-10"
         style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          animation: "grainFlicker 8s steps(10) infinite",
         }}
       />
 
-      {/* Top Spot Light */}
-      <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(0,0,0,0.95))]" />
+      {/* 2. Atmospheric Fog Layer */}
+      <div
+        className="fixed inset-0 pointer-events-none z-0 mix-blend-screen"
+        style={{
+          background: `
+              radial-gradient(circle at 10% 20%, rgba(255,255,255,0.03) 0%, transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(255,255,255,0.02) 0%, transparent 40%),
+              radial-gradient(ellipse at 50% 50%, rgba(100,120,150,0.02) 0%, transparent 60%)
+            `,
+          filter: "blur(60px)",
+          animation: "fogDrift 20s ease-in-out infinite alternate",
+        }}
+      />
+
+      {/* 3. Cement Texture (Base) */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-20 z-0 mix-blend-multiply"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      {/* 4. Vignette / Lighting */}
+      <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.05),rgba(0,0,0,0.8)_80%)]" />
 
       <div className="max-w-7xl mx-auto relative z-10 animate-fade-in">
         {sourceItems.map(({ column, sources }) => (
@@ -73,7 +136,7 @@ export function SourceDashboard() {
               <span className="i-ph-hash-duotone" />
               {column}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 md:gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-8 gap-y-12">
               {sources.map(item => (
                 column === "科技"
                   ? <InstaxCard key={item.id} item={item} />
@@ -91,6 +154,7 @@ function NewspaperCard({ item }: { item: SourceItemProps }) {
   const { isFocused, toggleFocus } = useFocusWith(item.id)
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: "200px" })
+  const randomStyle = useMemo(() => getRandomStyle(item.id), [item.id])
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["source", item.id, "preview"],
@@ -103,12 +167,18 @@ function NewspaperCard({ item }: { item: SourceItemProps }) {
   })
 
   return (
-    <div ref={ref} className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:-rotate-1">
+    <div
+      ref={ref}
+      style={randomStyle}
+      className="group relative transition-all duration-500 ease-out
+                 rotate-[var(--random-rotate)] translate-x-[var(--random-x)] translate-y-[var(--random-y)]
+                 hover:rotate-0 hover:translate-x-0 hover:translate-y-0 hover:scale-110 hover:z-50"
+    >
       {/* Scotch Tape */}
       <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-10 bg-white/20 backdrop-blur-[1px] rotate-[-5deg] z-20 shadow-sm border-l border-r border-white/10 pointer-events-none" />
 
       {/* Paper Body */}
-      <div className="relative bg-[#e8e6e1] text-neutral-900 p-4 shadow-lg shadow-black/40 min-h-[220px] flex flex-col">
+      <div className="relative bg-[#e8e6e1] text-neutral-900 p-4 shadow-lg shadow-black/40 min-h-[220px] flex flex-col transform-gpu">
         {/* Jagged Bottom Edge Simulation */}
         <div
           className="absolute bottom-0 left-0 w-full h-[4px] bg-[#e8e6e1]"
@@ -183,6 +253,7 @@ function InstaxCard({ item }: { item: SourceItemProps }) {
   const { isFocused, toggleFocus } = useFocusWith(item.id)
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: "200px" })
+  const randomStyle = useMemo(() => getRandomStyle(item.id), [item.id])
 
   const { data, isLoading } = useQuery({
     queryKey: ["source", item.id, "preview"],
@@ -197,33 +268,38 @@ function InstaxCard({ item }: { item: SourceItemProps }) {
   const topNews = data?.items?.[0]
 
   return (
-    <div ref={ref} className="group relative transition-all duration-300 hover:scale-105 hover:z-20 hover:rotate-1">
+    <div
+      ref={ref}
+      style={randomStyle}
+      className="group relative transition-all duration-500 ease-out
+                 rotate-[var(--random-rotate)] translate-x-[var(--random-x)] translate-y-[var(--random-y)]
+                 hover:rotate-0 hover:translate-x-0 hover:translate-y-0 hover:scale-110 hover:z-50"
+    >
       {/* Instax Body */}
-      <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden flex flex-col h-full">
+      <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden flex flex-col h-full transform-gpu">
         {/* Glossy Overlay */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
 
         {/* Photo Area */}
         <div className="bg-neutral-900 aspect-square w-full relative overflow-hidden mb-2 filter grayscale group-hover:grayscale-0 transition-all duration-500">
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-80"
-            style={{ backgroundImage: `url(/icons/${item.id.split("-")[0]}.png)` }}
-          />
+          <div className="absolute inset-0 bg-[#1a1a1a]" />
           <div className="absolute inset-0 bg-black/20" />
           {" "}
           {/* Dimmer */}
 
           {/* Breaking News Overlay (If available) */}
           {topNews && (
-            <div className="absolute bottom-0 left-0 w-full p-2 bg-gradient-to-t from-black/90 to-transparent text-white">
-              <a href={topNews.mobileUrl || topNews.url} target="_blank" rel="noreferrer" className="block text-[10px] leading-tight font-sans hover:underline hover:text-yellow-300 line-clamp-3">
+            <div className="absolute inset-0 p-3 flex items-center justify-center text-center">
+              <a href={topNews.mobileUrl || topNews.url} target="_blank" rel="noreferrer" className="text-xs leading-relaxed font-sans text-white/90 hover:text-yellow-300 transition-colors drop-shadow-md line-clamp-4">
                 {topNews.title}
               </a>
             </div>
           )}
 
           {isLoading && (
-            <div className="absolute bottom-2 left-2 right-2 h-1 bg-white/20 animate-pulse rounded" />
+            <div className="absolute inset-4 border border-white/10 animate-pulse rounded flex items-center justify-center">
+              <span className="i-ph-aperture-duotone text-white/20 text-2xl animate-spin" />
+            </div>
           )}
         </div>
 
