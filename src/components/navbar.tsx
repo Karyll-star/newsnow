@@ -1,5 +1,7 @@
 import { fixedColumnIds, metadata } from "@shared/metadata"
 import { Link } from "@tanstack/react-router"
+import { useAtomValue } from "jotai"
+import { clsx as $ } from "clsx"
 import { currentColumnIDAtom } from "~/atoms"
 
 export function NavBar() {

@@ -1,5 +1,11 @@
 import type { SourceID } from "@shared/types"
 import pinyin from "@shared/pinyin.json"
+import { useMemo } from "react"
+import { sources } from "@shared/sources"
+import { columns } from "@shared/metadata"
+import { typeSafeObjectEntries } from "@shared/type.util"
+import { clsx as $ } from "clsx"
+import { useFocusWith } from "~/hooks/useFocus"
 
 interface SourceItemProps {
   id: SourceID
@@ -35,9 +41,9 @@ export function SourceDashboard() {
       groupByColumn(typeSafeObjectEntries(sources)
         .filter(([_, source]) => !source.redirect)
         .map(([k, source]) => ({
-          id: k,
+          id: k as SourceID,
           title: source.title,
-          column: source.column ? columns[source.column].zh : "未分类",
+          column: source.column && (source.column in columns) ? columns[source.column as keyof typeof columns].zh : "未分类",
           name: source.name,
           pinyin: pinyin?.[k as keyof typeof pinyin] ?? "",
         })))
