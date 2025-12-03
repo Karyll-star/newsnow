@@ -12,6 +12,7 @@ export function NavBar() {
       "shadow shadow-primary/20 hover:shadow-primary/50 transition-shadow-500",
     ])}
     >
+      {/* Home link */}
       <Link
         to="/"
         className="px-2 hover:(bg-primary/10 rounded-md) cursor-pointer transition-all"
