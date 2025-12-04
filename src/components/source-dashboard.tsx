@@ -278,7 +278,7 @@ function InstaxCard({ item }: { item: SourceItemProps }) {
       {/* Instax Body */}
       <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden flex flex-col h-full transform-gpu">
         {/* Glossy Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
 
         {/* Photo Area */}
         <div className="bg-neutral-900 aspect-[3/4] w-full relative overflow-hidden mb-2 filter grayscale group-hover:grayscale-0 transition-all duration-500">
