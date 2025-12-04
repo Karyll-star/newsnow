@@ -265,7 +265,7 @@ function InstaxCard({ item }: { item: SourceItemProps }) {
     staleTime: 1000 * 60 * 5,
   })
 
-  const topNews = data?.items?.[0]
+  const newsList = data?.items?.slice(0, 3)
 
   return (
     <div
@@ -281,18 +281,26 @@ function InstaxCard({ item }: { item: SourceItemProps }) {
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
 
         {/* Photo Area */}
-        <div className="bg-neutral-900 aspect-square w-full relative overflow-hidden mb-2 filter grayscale group-hover:grayscale-0 transition-all duration-500">
+        <div className="bg-neutral-900 aspect-[3/4] w-full relative overflow-hidden mb-2 filter grayscale group-hover:grayscale-0 transition-all duration-500">
           <div className="absolute inset-0 bg-[#1a1a1a]" />
           <div className="absolute inset-0 bg-black/20" />
           {" "}
           {/* Dimmer */}
 
           {/* Breaking News Overlay (If available) */}
-          {topNews && (
-            <div className="absolute inset-0 p-3 flex items-center justify-center text-center">
-              <a href={topNews.mobileUrl || topNews.url} target="_blank" rel="noreferrer" className="text-xs leading-relaxed font-sans text-white/90 hover:text-yellow-300 transition-colors drop-shadow-md line-clamp-4">
-                {topNews.title}
-              </a>
+          {newsList && newsList.length > 0 && (
+            <div className="absolute inset-0 p-4 flex flex-col justify-center space-y-3">
+              {newsList.map(news => (
+                <a
+                  key={news.id}
+                  href={news.mobileUrl || news.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-xs leading-snug font-sans text-white/90 hover:text-yellow-300 transition-colors drop-shadow-md border-b border-white/10 last:border-0 pb-2 last:pb-0"
+                >
+                  {news.title}
+                </a>
+              ))}
             </div>
           )}
 
