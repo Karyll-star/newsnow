@@ -5,7 +5,11 @@ interface Point {
   y: number
 }
 
-export type Line = Point[]
+export interface Line {
+  points: Point[]
+  color: string
+}
 
 export const drawingModeAtom = atom(false)
+export const drawingColorAtom = atom("black")
 export const linesAtom = atom<Line[]>([])

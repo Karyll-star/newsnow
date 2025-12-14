@@ -11,7 +11,7 @@ import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 import type { ReactZoomPanPinchRef, ReactZoomPanPinchState } from "react-zoom-pan-pinch"
 import { myFetch } from "~/utils"
 import { activeCardAtom } from "~/atoms/focus"
-import { type Line, drawingModeAtom, linesAtom } from "~/atoms/drawing"
+import { type Line, drawingColorAtom, drawingModeAtom, linesAtom } from "~/atoms/drawing"
 
 // --- Helper Functions & Components ---
 
@@ -24,36 +24,111 @@ function getRandomRotation(id: string) {
   return { transform: `rotate(${rotate}deg)` }
 }
 
-function BrushButton() {
+function BrushTools() {
   const [isDrawing, setIsDrawing] = useAtom(drawingModeAtom)
+  const [color, setColor] = useAtom(drawingColorAtom)
+  const [isPaletteOpen, setPaletteOpen] = useState(false)
+  const colors = ["black", "red", "green", "orange", "yellow"]
+
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const dragInfo = useRef({ isDragging: false, startX: 0, startY: 0, moved: false })
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Only allow dragging on the main button container, not the palette buttons
+    if ((e.target as HTMLElement).closest("button")) return
+
+    dragInfo.current = {
+      isDragging: true,
+      startX: e.clientX - position.x,
+      startY: e.clientY - position.y,
+      moved: false,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragInfo.current.isDragging) return
+    dragInfo.current.moved = true
+    setPosition({
+      x: e.clientX - dragInfo.current.startX,
+      y: e.clientY - dragInfo.current.startY,
+    })
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragInfo.current.isDragging) return
+    dragInfo.current.isDragging = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    setTimeout(() => {
+      dragInfo.current.moved = false
+    }, 0)
+  }
+
+  const handleBrushClick = () => {
+    if (dragInfo.current.moved) return
+    setIsDrawing(!isDrawing)
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => setIsDrawing(!isDrawing)}
-      className={$(
-        "absolute top-4 right-4 z-50 p-2 rounded-lg shadow-md text-2xl transition-colors",
-        isDrawing ? "bg-red-500 text-white" : "bg-white/50 backdrop-blur-sm text-black",
-      )}
-      title="Toggle Drawing Mode"
+    <div
+      className={`absolute bottom-4 right-4 z-50 flex items-center gap-2 p-2 rounded-lg shadow-lg bg-white/60 backdrop-blur-md ${dragInfo.current.isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
     >
-      🖌️
-    </button>
+      <div className="flex flex-col gap-2">
+        {isPaletteOpen && (
+          <div className="flex flex-col items-center gap-2 p-1 rounded-md bg-black/10">
+            {colors.map(c => (
+              <button
+                key={c}
+                type="button"
+                className={`w-6 h-6 rounded-full border-2 transition-all ${color === c ? "border-blue-500 scale-110" : "border-transparent hover:scale-110"}`}
+                style={{ backgroundColor: c }}
+                onClick={() => setColor(c)}
+              />
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(!isPaletteOpen)}
+          className="p-1 text-black/50 hover:text-black cursor-pointer"
+        >
+          <svg className={`w-4 h-4 transition-transform ${isPaletteOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={handleBrushClick}
+        className={$(
+          "p-2 rounded-lg shadow-md text-2xl transition-colors cursor-pointer",
+          isDrawing ? "bg-red-500 text-white" : "bg-white text-black",
+        )}
+        title="Toggle Drawing Mode"
+      >
+        🖌️
+      </button>
+    </div>
   )
 }
 
 function DrawingCanvas() {
   const [isDrawingMode] = useAtom(drawingModeAtom)
   const [lines, setLines] = useAtom(linesAtom)
+  const [color] = useAtom(drawingColorAtom)
   const [currentLine, setCurrentLine] = useState<Line | null>(null)
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
-    setCurrentLine([{ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }])
+    setCurrentLine({ points: [{ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }], color })
   }
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.buttons !== 1 || !currentLine) return
-    setCurrentLine([...currentLine, { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }])
+    const newPoints = [...currentLine.points, { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }]
+    setCurrentLine({ ...currentLine, points: newPoints })
   }
 
   const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -64,8 +139,8 @@ function DrawingCanvas() {
   }
 
   const getSvgPathFromLine = (line: Line) => {
-    if (line.length < 2) return ""
-    const [firstPoint, ...restPoints] = line
+    if (line.points.length < 2) return ""
+    const [firstPoint, ...restPoints] = line.points
     return `M ${firstPoint.x} ${firstPoint.y} ${restPoints.map(p => `L ${p.x} ${p.y}`).join(" ")}`
   }
 
@@ -87,7 +162,7 @@ function DrawingCanvas() {
         <path
           key={`line-${index}`}
           d={getSvgPathFromLine(line)}
-          stroke="black"
+          stroke={line.color}
           strokeWidth="2"
           fill="none"
           strokeLinecap="round"
@@ -97,7 +172,7 @@ function DrawingCanvas() {
       {isDrawingMode && currentLine && (
         <path
           d={getSvgPathFromLine(currentLine)}
-          stroke="black"
+          stroke={currentLine.color}
           strokeWidth="2"
           fill="none"
           strokeLinecap="round"
@@ -168,7 +243,7 @@ export function SourceDashboard() {
 
   return (
     <div className="w-full h-screen bg-dot-grid overflow-hidden">
-      <BrushButton />
+      <BrushTools />
       <style>
         {`
         @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@700;900&display=swap');
