@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Newspaper Component</title>
+    <!-- 引入字体：Playfair Display (标题) 和 Lato (正文) -->
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --paper-color: #f7f5f0; /* 米白报纸色 */
+            --ink-color: #2c2c2c;   /* 深灰墨色 */
+            --accent-color: #c0392b;/* 现代感的强调色（暗红） */
+            --paper-width: 360px;   /* 单面宽度 */
+            --paper-height: 520px;  /* 单面高度 */
+            --anim-speed: 0.8s;     /* 动画速度 */
+            --stack-shadow: 
+                1px 1px 0 #e0ded9,
+                2px 2px 0 #e0ded9,
+                3px 3px 0 #e0ded9,
+                4px 4px 0 #e0ded9,
+                5px 5px 0 #e0ded9,
+                6px 6px 15px rgba(0,0,0,0.15); /* 堆叠阴影 */
+            --flat-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        body {
+            background-color: #e8e8e8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Lato', sans-serif;
+            overflow: hidden; /* 防止展开时出现滚动条 */
+        }
+
+        /* 3D 舞台 */
+        .newspaper-stage {
+            perspective: 1500px;
+            position: relative;
+            /* 预留展开后的宽度空间 */
+            width: calc(var(--paper-width) * 2); 
+            height: var(--paper-height);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 报纸容器 */
+        .newspaper-wrapper {
+            position: relative;
+            width: var(--paper-width);
+            height: var(--paper-height);
+            transform-style: preserve-3d;
+            transition: transform var(--anim-speed) cubic-bezier(0.25, 1, 0.5, 1);
+            cursor: pointer;
+        }
+
+        /* 页面通用样式 */
+        .page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--paper-color);
+            padding: 30px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            backface-visibility: hidden; /* 背面不可见 */
+            overflow: hidden;
+            /* 纸张纹理感 */
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+        }
+
+        /* 右页（封面/折叠时的正面） */
+        .page.right {
+            z-index: 2;
+            right: 0;
+            transform-origin: left center;
+            box-shadow: var(--stack-shadow); /* 初始状态有堆叠感 */
+            transition: box-shadow var(--anim-speed), transform var(--anim-speed);
+            border-left: 1px solid rgba(0,0,0,0.05); /* 中缝线 */
+        }
+
+        /* 左页（折叠时隐藏在后面） */
+        .page.left {
+            z-index: 1;
+            left: 0; /* 实际上是在同一个位置，通过3D旋转移开 */
+            transform-origin: right center;
+            transform: rotateY(0deg); /* 初始是平铺的，但wrapper会让它不可见 */
+            background-color: #f2efe9; /* 稍微暗一点模拟内页 */
+            /* 初始状态被右页盖住，我们需要特殊的处理 */
+            /* 在这个设计里，我们让Wrapper作为右页，左页是展开出来的 */
+            position: absolute;
+            left: -100%; /* 放在左边 */
+            transform: rotateY(90deg); /* 初始状态折叠起来 */
+            transition: transform var(--anim-speed);
+            box-shadow: inset -5px 0 20px rgba(0,0,0,0.05); /* 内阴影模拟书脊 */
+        }
+
+        /* ----- 内容排版设计 ----- */
+        .meta-header {
+            border-bottom: 2px solid var(--ink-color);
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+        }
+
+        .headline {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            line-height: 1.1;
+            color: var(--ink-color);
+            margin: 0 0 20px 0;
+            font-weight: 900;
+        }
+
+        .headline.small {
+            font-size: 1.6rem;
+        }
+
+        .body-content {
+            font-size: 0.95rem;
+            line-height: 1.6; /* 这种行高，每面大概能放12-14行 */
+            color: #444;
+            text-align: justify;
+            column-count: 1; /* 默认单栏，更像现代杂志风格 */
+            flex-grow: 1;
+        }
+        
+        /* 首字下沉 */
+        .drop-cap::first-letter {
+            float: left;
+            font-family: 'Playfair Display', serif;
+            font-size: 3.5rem;
+            line-height: 0.8;
+            padding-right: 8px;
+            padding-top: 4px;
+            color: var(--accent-color);
+        }
+
+        .cta-hint {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            font-weight: bold;
+            opacity: 1;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.05);
+            color: var(--ink-color);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s;
+            pointer-events: none; /* 初始不可点 */
+            z-index: 10;
+        }
+        
+        .close-btn:hover {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        /* 图片占位符 */
+        .img-placeholder {
+            width: 100%;
+            height: 120px;
+            background-color: #ddd;
+            margin-bottom: 15px;
+            filter: grayscale(100%) contrast(1.2); /* 模拟报纸图片 */
+            background-size: cover;
+            background-position: center;
+            mix-blend-mode: multiply;
+        }
+
+        /* ----- 状态控制: 展开 (Open) ----- */
+        
+        /* 1. 容器移动：整体向右平移，因为左页展出 */
+        .newspaper-stage.is-open .newspaper-wrapper {
+            transform: translateX(50%); /* 这里的50%是wrapper宽度的50% */
+            cursor: default;
+        }
+
+        /* 2. 左页旋转出来 */
+        .newspaper-stage.is-open .page.left {
+            transform: rotateY(0deg);
+        }
+
+        /* 3. 右页去除堆叠阴影，变为平面阴影 */
+        .newspaper-stage.is-open .page.right {
+            box-shadow: var(--flat-shadow);
+        }
+
+        /* 4. 左页添加平面阴影 */
+        .newspaper-stage.is-open .page.left {
+            box-shadow: -5px 10px 30px rgba(0,0,0,0.1); /* 左侧阴影 */
+        }
+
+        /* 5. 隐藏提示，显示关闭按钮 */
+        .newspaper-stage.is-open .cta-hint {
+            opacity: 0;
+        }
+        
+        .newspaper-stage.is-open .close-btn {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="newspaper-stage" id="newspaper">
+        <div class="newspaper-wrapper">
+            <!-- 左页 (展开后显示) -->
+            <div class="page left">
+                <div class="meta-header">
+                    <span>Issue No. 240</span>
+                    <span>Technology</span>
+                </div>
+                <div class="headline small">The Architecture of Modern Web</div>
+                <div class="body-content">
+                    <p>In the evolving landscape of frontend development, the bridge between physical metaphors and digital interfaces is narrowing. We strive to create components that feel tangible.</p>
+                    <p>CSS Grid and Flexbox have revolutionized how we structure layout, allowing for complex print-like designs that respond gracefully to screen sizes.</p>
+                    <p>This component demonstrates the power of CSS 3D transforms. By manipulating the perspective origin, we create an illusion of depth that mimics paper behavior.</p>
+                    <p>Performance remains key. Using hardware-accelerated properties ensures 60fps animations even on mobile devices.</p>
+                </div>
+                <!-- 关闭按钮放在左页上方更符合从右往左翻回来的逻辑，或者右页 -->
+            </div>
+
+            <!-- 右页 (折叠时的封面) -->
+            <div class="page right">
+                <button class="close-btn" id="closeBtn">✕</button>
+                <div class="meta-header">
+                    <span>Daily Frontend</span>
+                    <span>Aug 24, 2023</span>
+                </div>
+                
+                <!-- 模拟一张图片 -->
+                <div class="img-placeholder" style="background-image: url('https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=300&auto=format&fit=crop');"></div>
+
+                <div class="headline">Breaking: Design Meets Code</div>
+                
+                <div class="body-content drop-cap">
+                    <p>Today marks a significant shift in user interface design paradigms. The request was simple: create a component that feels like a newspaper but acts like an app.</p>
+                    <p>The challenge lies in balancing skeuomorphism with flat design. We don't want a texture that looks dirty, but we need enough "noise" to suggest material.</p>
+                    <p>Notice the shadow stack on the right edge? It suggests there is more content underneath, inviting the user to explore. Click anywhere to unfold the story.</p>
+                </div>
+
+                <div class="cta-hint">Click to Read ➔</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const stage = document.getElementById('newspaper');
+        const wrapper = document.querySelector('.newspaper-wrapper');
+        const closeBtn = document.getElementById('closeBtn');
+        let isOpen = false;
+
+        // 点击报纸展开
+        wrapper.addEventListener('click', (e) => {
+            // 如果点击的是关闭按钮，不执行展开逻辑（虽然关闭按钮在冒泡链上，但逻辑分离）
+            if (e.target === closeBtn) return;
+            
+            if (!isOpen) {
+                stage.classList.add('is-open');
+                isOpen = true;
+            }
+        });
+
+        // 点击关闭按钮折叠
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 防止触发 wrapper 的点击事件
+            stage.classList.remove('is-open');
+            isOpen = false;
+        });
+    </script>
+</body>
+</html>

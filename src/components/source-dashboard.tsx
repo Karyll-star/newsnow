@@ -1,65 +1,113 @@
 import type { SourceID, SourceResponse } from "@shared/types"
 import pinyin from "@shared/pinyin.json"
-import { useMemo, useRef } from "react"
+import { useMemo, useRef, useState } from "react"
 import { sources } from "@shared/sources"
 import { columns } from "@shared/metadata"
 import { typeSafeObjectEntries } from "@shared/type.util"
 import { clsx as $ } from "clsx"
 import { useQuery } from "@tanstack/react-query"
-import { useInView } from "framer-motion"
+import { useAtom } from "jotai"
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
+import type { ReactZoomPanPinchRef, ReactZoomPanPinchState } from "react-zoom-pan-pinch"
 import { myFetch } from "~/utils"
-import { useFocusWith } from "~/hooks/useFocus"
+import { activeCardAtom } from "~/atoms/focus"
+import { type Line, drawingModeAtom, linesAtom } from "~/atoms/drawing"
 
-interface SourceItemProps {
-  id: SourceID
-  name: string
-  title?: string
-  column: any
-  pinyin: string
-}
+// --- Helper Functions & Components ---
 
-function groupByColumn(items: SourceItemProps[]) {
-  return items.reduce((acc, item) => {
-    const k = acc.find(i => i.column === item.column)
-    if (k) k.sources = [...k.sources, item]
-    else acc.push({ column: item.column, sources: [item] })
-    return acc
-  }, [] as {
-    column: string
-    sources: SourceItemProps[]
-  }[]).sort((m, n) => {
-    if (m.column === "科技") return -1
-    if (n.column === "科技") return 1
-
-    if (m.column === "未分类") return 1
-    if (n.column === "未分类") return -1
-
-    return m.column < n.column ? -1 : 1
-  })
-}
-
-function getRandomStyle(id: string) {
+function getRandomRotation(id: string) {
   let hash = 0
   for (let i = 0; i < id.length; i++) {
     hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
+  const rotate = (hash % 4) - 2
+  return { transform: `rotate(${rotate}deg)` }
+}
 
-  // Deterministic random values
-  const rotate = (hash % 10) - 5 // -5 to 4 deg
-  const x = (hash % 16) - 8 // -8 to 7 px
-  const y = (hash % 16) - 8 // -8 to 7 px
+function BrushButton() {
+  const [isDrawing, setIsDrawing] = useAtom(drawingModeAtom)
+  return (
+    <button
+      type="button"
+      onClick={() => setIsDrawing(!isDrawing)}
+      className={$(
+        "absolute top-4 right-4 z-50 p-2 rounded-lg shadow-md text-2xl transition-colors",
+        isDrawing ? "bg-red-500 text-white" : "bg-white/50 backdrop-blur-sm text-black",
+      )}
+      title="Toggle Drawing Mode"
+    >
+      🖌️
+    </button>
+  )
+}
 
-  return {
-    "--random-rotate": `${rotate}deg`,
-    "--random-x": `${x}px`,
-    "--random-y": `${y}px`,
-  } as React.CSSProperties
+function DrawingCanvas() {
+  const [isDrawingMode] = useAtom(drawingModeAtom)
+  const [lines, setLines] = useAtom(linesAtom)
+  const [currentLine, setCurrentLine] = useState<Line | null>(null)
+
+  if (!isDrawingMode) return null
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setCurrentLine([{ x: e.clientX, y: e.clientY }])
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.buttons !== 1 || !currentLine) return
+    setCurrentLine([...currentLine, { x: e.clientX, y: e.clientY }])
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!currentLine) return
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    setLines([...lines, currentLine])
+    setCurrentLine(null)
+  }
+
+  const getSvgPathFromLine = (line: Line) => {
+    if (line.length < 2) return ""
+    const [firstPoint, ...restPoints] = line
+    return `M ${firstPoint.x} ${firstPoint.y} ${restPoints.map(p => `L ${p.x} ${p.y}`).join(" ")}`
+  }
+
+  return (
+    <svg
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      className="absolute inset-0 w-full h-full z-40"
+    >
+      {lines.map((line, index) => (
+        <path
+          key={`line-${index}`}
+          d={getSvgPathFromLine(line)}
+          stroke="black"
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+      {currentLine && (
+        <path
+          d={getSvgPathFromLine(currentLine)}
+          stroke="black"
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  )
 }
 
 export function SourceDashboard() {
-  const sourceItems = useMemo(
+  const [isDrawingMode] = useAtom(drawingModeAtom)
+  const allSources = useMemo(
     () =>
-      groupByColumn(typeSafeObjectEntries(sources)
+      typeSafeObjectEntries(sources)
         .filter(([_, source]) => !source.redirect)
         .map(([k, source]) => ({
           id: k as SourceID,
@@ -67,268 +115,284 @@ export function SourceDashboard() {
           column: source.column && (source.column in columns) ? columns[source.column as keyof typeof columns].zh : "未分类",
           name: source.name,
           pinyin: pinyin?.[k as keyof typeof pinyin] ?? "",
-        })))
-    , [],
+        })),
+    [],
   )
 
+  const cardPositions = useMemo(() => calculateJitteredGridLayout(allSources.length), [allSources.length])
+  const allSourcesWithPos = useMemo(() => allSources.map((source, index) => ({
+    ...source,
+    position: cardPositions[index],
+  })), [allSources, cardPositions])
+
+  const cardWidth = 360
+  const cardHeight = 520
+  const transformRef = useRef<ReactZoomPanPinchRef | null>(null)
+
+  const [viewState, setViewState] = useState<ReactZoomPanPinchState>({
+    scale: 0.7,
+    positionX: 0,
+    positionY: 0,
+  })
+
+  const visibleCards = useMemo(() => {
+    const { scale, positionX, positionY } = viewState
+    const { innerWidth = 1920, innerHeight = 1080 } = typeof window !== "undefined" ? window : {}
+
+    const viewX = -positionX / scale
+    const viewY = -positionY / scale
+    const viewWidth = innerWidth / scale
+    const viewHeight = innerHeight / scale
+
+    const buffer = 1200
+
+    return allSourcesWithPos.filter(({ position }) => {
+      const cardX1 = position.x - (cardWidth / 2)
+      const cardX2 = position.x + (cardWidth / 2)
+      const cardY1 = position.y - (cardHeight / 2)
+      const cardY2 = position.y + (cardHeight / 2)
+
+      return (
+        cardX1 < viewX + viewWidth + buffer
+        && cardX2 > viewX - buffer
+        && cardY1 < viewY + viewHeight + buffer
+        && cardY2 > viewY - buffer
+      )
+    })
+  }, [allSourcesWithPos, viewState])
+
   return (
-    <div className="min-h-screen w-full bg-[#1a1a1a] text-[#e0e0e0] font-sans p-4 md:p-8 relative overflow-hidden perspective-1000">
+    <div className="w-full h-screen bg-dot-grid overflow-hidden">
+      <BrushButton />
       <style>
         {`
-        @keyframes fogDrift {
-          0% { transform: translate3d(0, 0, 0); opacity: 0.4; }
-          50% { transform: translate3d(-2%, -1%, 0); opacity: 0.6; }
-          100% { transform: translate3d(2%, 1%, 0); opacity: 0.4; }
+        @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@700;900&display=swap');
+        
+        .bg-dot-grid {
+          background-color: #e8e8e8;
+          background-image: radial-gradient(circle, #d0d0d0 1px, rgba(0,0,0,0) 1px);
+          background-size: 20px 20px;
         }
-        @keyframes grainFlicker {
-          0%, 100% { transform: translate(0,0); }
-          10% { transform: translate(-1%, -1%); }
-          20% { transform: translate(1%, 1%); }
-          30% { transform: translate(-2%, 2%); }
-          40% { transform: translate(2%, -2%); }
-          50% { transform: translate(-1%, 2%); }
-          60% { transform: translate(1%, -2%); }
-          70% { transform: translate(2%, 1%); }
-          80% { transform: translate(-2%, -1%); }
-          90% { transform: translate(1%, -1%); }
+
+        .newspaper-container {
+          width: ${cardWidth}px;
+          height: ${cardHeight}px;
+          transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+          overflow: hidden;
+          box-shadow: 1px 1px 0 #e0ded9, 2px 2px 0 #e0ded9, 3px 3px 0 #e0ded9, 4px 4px 0 #e0ded9, 5px 5px 0 #e0ded9, 6px 6px 15px rgba(0,0,0,0.15);
+          position: absolute;
+          cursor: pointer;
         }
-      `}
+        .drawing-mode .newspaper-container {
+          pointer-events: none;
+        }
+        .newspaper-container.is-open {
+          width: ${cardWidth * 2}px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .page-wrapper {
+          display: flex;
+          width: ${cardWidth * 2}px;
+          height: 100%;
+        }
+        .page {
+          width: ${cardWidth}px;
+          height: 100%;
+          padding: 30px;
+          box-sizing: border-box;
+          background-color: #f7f5f0;
+          font-family: 'Lato', sans-serif;
+          color: #2c2c2c;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          border-left: 1px solid rgba(0,0,0,0.05);
+          background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+        }
+        .page.left {
+          border-right: 1px solid rgba(0,0,0,0.1);
+        }
+        .meta-header {
+            border-bottom: 2px solid #2c2c2c; margin-bottom: 15px; padding-bottom: 5px;
+            display: flex; justify-content: space-between; font-size: 0.75rem; text-transform: uppercase;
+            letter-spacing: 1px; color: #666;
+        }
+        .headline {
+            font-family: 'Playfair Display', serif; font-size: 2rem; line-height: 1.1;
+            color: #2c2c2c; margin: 0 0 20px 0; font-weight: 900;
+        }
+        .body-content {
+            font-size: 0.95rem; line-height: 1.6; color: #444;
+            text-align: justify; flex-grow: 1;
+        }
+        .body-content.drop-cap ul li:first-child a::first-letter {
+            float: left; font-family: 'Playfair Display', serif; font-size: 3.5rem;
+            line-height: 0.8; padding-right: 8px; padding-top: 4px; color: #c0392b;
+        }
+        .close-btn {
+            position: absolute; top: 15px; right: 15px; width: 30px; height: 30px;
+            border-radius: 50%; background: rgba(0,0,0,0.05); color: #2c2c2c;
+            border: none; cursor: pointer; display: flex; justify-content: center; align-items: center;
+            opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 10;
+        }
+        .is-open .close-btn { opacity: 1; pointer-events: auto; }
+        .close-btn:hover { background: #c0392b; color: white; }
+        `}
       </style>
 
-      {/* 1. Cinematic Grain Layer (Highest freq noise + animation) */}
-      <div
-        className="fixed inset-[-50%] w-[200%] h-[200%] pointer-events-none z-50 mix-blend-overlay opacity-10"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-          animation: "grainFlicker 8s steps(10) infinite",
-        }}
-      />
-
-      {/* 2. Atmospheric Fog Layer */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0 mix-blend-screen"
-        style={{
-          background: `
-              radial-gradient(circle at 10% 20%, rgba(255,255,255,0.03) 0%, transparent 40%),
-              radial-gradient(circle at 90% 80%, rgba(255,255,255,0.02) 0%, transparent 40%),
-              radial-gradient(ellipse at 50% 50%, rgba(100,120,150,0.02) 0%, transparent 60%)
-            `,
-          filter: "blur(60px)",
-          animation: "fogDrift 20s ease-in-out infinite alternate",
-        }}
-      />
-
-      {/* 3. Cement Texture (Base) */}
-      <div
-        className="fixed inset-0 pointer-events-none opacity-20 z-0 mix-blend-multiply"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-
-      {/* 4. Vignette / Lighting */}
-      <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.05),rgba(0,0,0,0.8)_80%)]" />
-
-      <div className="max-w-7xl mx-auto relative z-10 animate-fade-in">
-        {sourceItems.map(({ column, sources }) => (
-          <div key={column} className="mb-16">
-            <h2 className="text-2xl font-bold mb-6 text-neutral-400/80 tracking-widest uppercase flex items-center gap-3 border-b border-white/10 pb-2">
-              <span className="i-ph-hash-duotone" />
-              {column}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-8 gap-y-12">
-              {sources.map(item => (
-                column === "科技"
-                  ? <InstaxCard key={item.id} item={item} />
-                  : <NewspaperCard key={item.id} item={item} />
-              ))}
-            </div>
+      <TransformWrapper
+        ref={transformRef}
+        initialScale={0.7}
+        minScale={0.1}
+        maxScale={2}
+        limitToBounds={false}
+        panning={{ velocityDisabled: isDrawingMode }}
+        onTransformed={(ref, state) => setViewState(state)}
+      >
+        <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%" }}>
+          <div className={$("relative w-full h-full", isDrawingMode && "drawing-mode")}>
+            {visibleCards.map(item => (
+              <NewspaperCard
+                key={item.id}
+                item={item}
+                position={item.position}
+                transformRef={transformRef}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </TransformComponent>
+      </TransformWrapper>
+      <DrawingCanvas />
     </div>
   )
 }
 
-function NewspaperCard({ item }: { item: SourceItemProps }) {
-  const { isFocused, toggleFocus } = useFocusWith(item.id)
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "200px" })
-  const randomStyle = useMemo(() => getRandomStyle(item.id), [item.id])
+function calculateJitteredGridLayout(count: number) {
+  const cardWidth = 360
+  const cardHeight = 520
+  const padding = 150
+  const cellWidth = cardWidth + padding
+  const cols = Math.ceil(Math.sqrt(count))
+  const rows = Math.ceil(count / cols)
+
+  const gridSlots = Array.from({ length: count }, (_, i) => ({
+    r: Math.floor(i / cols),
+    c: i % cols,
+  }))
+
+  for (let i = gridSlots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [gridSlots[i], gridSlots[j]] = [gridSlots[j], gridSlots[i]]
+  }
+
+  return gridSlots.map(({ r, c }) => {
+    const baseX = (c - (cols - 1) / 2) * cellWidth
+    const baseY = r * (cardHeight + padding) - (rows - 1) * (cardHeight + padding) / 2
+    const jitterX = (Math.random() - 0.5) * padding
+    const jitterY = (Math.random() - 0.5) * padding
+    return { x: baseX + jitterX, y: baseY + jitterY }
+  })
+}
+
+function NewspaperCard({ item, position, transformRef }: { item: SourceItemProps, position: { x: number, y: number }, transformRef: React.RefObject<ReactZoomPanPinchRef> }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeCard, setActiveCard] = useAtom(activeCardAtom)
+  const nodeRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["source", item.id, "preview"],
-    queryFn: async () => {
-      const res = await myFetch<SourceResponse>(`/s?id=${item.id}`)
-      return res
-    },
-    enabled: isInView,
-    staleTime: 1000 * 60 * 5, // 5 mins
+    queryFn: async () => myFetch<SourceResponse>(`/s?id=${item.id}`),
+    enabled: true,
+    staleTime: 1000 * 60 * 10,
   })
+
+  const handleContainerClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).tagName === "A" || (e.target as HTMLElement).closest("button")) return
+
+    if (isOpen) {
+      setIsOpen(false)
+    } else {
+      if (nodeRef.current && transformRef.current) {
+        setIsOpen(true)
+        setActiveCard(item.id)
+        transformRef.current.zoomToElement(nodeRef.current, 0.9, 600, "easeOut")
+      }
+    }
+  }
+
+  const handleClose = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsOpen(false)
+  }
+
+  const zIndex = activeCard === item.id ? 100 : 1
+  const rotationStyle = useMemo(() => getRandomRotation(item.id), [item.id])
 
   return (
     <div
-      ref={ref}
-      style={randomStyle}
-      className="group relative transition-all duration-500 ease-out
-                 rotate-[var(--random-rotate)] translate-x-[var(--random-x)] translate-y-[var(--random-y)]
-                 hover:rotate-0 hover:translate-x-0 hover:translate-y-0 hover:scale-110 hover:z-50"
+      ref={nodeRef}
+      className={$("newspaper-container", isOpen && "is-open")}
+      style={{
+        left: `calc(50% + ${position.x}px)`,
+        top: `calc(50% + ${position.y}px)`,
+        transform: "translate(-50%, -50%)",
+        zIndex,
+        ...rotationStyle,
+      }}
+      onClick={handleContainerClick}
     >
-      {/* Scotch Tape */}
-      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-10 bg-white/20 backdrop-blur-[1px] rotate-[-5deg] z-20 shadow-sm border-l border-r border-white/10 pointer-events-none" />
-
-      {/* Paper Body */}
-      <div className="relative bg-[#e8e6e1] text-neutral-900 p-4 shadow-lg shadow-black/40 min-h-[220px] flex flex-col transform-gpu">
-        {/* Jagged Bottom Edge Simulation */}
-        <div
-          className="absolute bottom-0 left-0 w-full h-[4px] bg-[#e8e6e1]"
-          style={{
-            clipPath: "polygon(0% 0%, 5% 100%, 10% 0%, 15% 100%, 20% 0%, 25% 100%, 30% 0%, 35% 100%, 40% 0%, 45% 100%, 50% 0%, 55% 100%, 60% 0%, 65% 100%, 70% 0%, 75% 100%, 80% 0%, 85% 100%, 90% 0%, 95% 100%, 100% 0%)",
-            transform: "translateY(99%)",
-          }}
-        />
-
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex flex-col">
-            {/* Marker Highlight */}
-            <span className="relative inline-block mb-1">
-              <span className="font-serif font-bold text-lg leading-tight relative z-10">{item.name}</span>
-              <span className={$("absolute bottom-1 left-0 w-full h-2 -z-0 opacity-40 -rotate-1 rounded-sm", `bg-${sources[item.id].color}-500`)} />
+      <div className="page-wrapper">
+        <div className="page left">
+          <div className="meta-header">
+            <span>{item.title || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+            <span>{new Date().getFullYear()}</span>
+          </div>
+          <div className="headline">{item.name}</div>
+          <div className="body-content drop-cap">
+            {isLoading
+              ? <p>Loading...</p>
+              : isError
+                ? <p style={{ color: "#c0392b" }}>Failed to load.</p>
+                : (
+                    <ul>
+                      {data?.items?.slice(0, 10).map(news => (
+                        <li key={news.id}>
+                          <a href={news.mobileUrl || news.url} target="_blank" rel="noreferrer" className="hover:text-[#c0392b]">
+                            {news.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+          </div>
+        </div>
+        <div className="page right">
+          <button type="button" className="close-btn" onClick={handleClose}>✕</button>
+          <div className="meta-header">
+            <span>
+              More from
+              {item.name}
             </span>
-            {item.title && <span className="text-xs font-serif text-neutral-600 italic leading-tight">{item.title}</span>}
           </div>
-
-          <button
-            type="button"
-            onClick={toggleFocus}
-            className={$(
-              "p-1 rounded-full transition-all",
-              isFocused ? "text-red-700 opacity-100 scale-110" : "text-neutral-400 opacity-0 group-hover:opacity-100 hover:text-red-700",
-            )}
-            title={isFocused ? "Remove from case" : "Add to case"}
-          >
-            <span className={$(isFocused ? "i-ph-push-pin-fill" : "i-ph-push-pin-duotone", "text-xl")} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {isLoading
-            ? (
-                <div className="space-y-2 opacity-40 animate-pulse">
-                  <div className="h-2 bg-neutral-800 w-full rounded-[1px]" />
-                  <div className="h-2 bg-neutral-800 w-[90%] rounded-[1px]" />
-                  <div className="h-2 bg-neutral-800 w-[70%] rounded-[1px]" />
-                  <div className="h-2 bg-neutral-800 w-[80%] rounded-[1px]" />
-                </div>
-              )
-            : isError
-              ? (
-                  <div className="text-xs text-red-800/60 font-serif italic text-center mt-4">Unable to retrieve evidence.</div>
-                )
-              : (
-                  <ul className="space-y-2">
-                    {data?.items?.slice(0, 5).map(news => (
-                      <li key={news.id} className="text-xs font-serif leading-snug group/item">
-                        <span className="text-neutral-400 mr-1">-</span>
-                        <a
-                          href={news.mobileUrl || news.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="hover:underline hover:text-red-900 decoration-red-900/30 decoration-1 underline-offset-2 transition-colors"
-                        >
-                          {news.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function InstaxCard({ item }: { item: SourceItemProps }) {
-  const { isFocused, toggleFocus } = useFocusWith(item.id)
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "200px" })
-  const randomStyle = useMemo(() => getRandomStyle(item.id), [item.id])
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["source", item.id, "preview"],
-    queryFn: async () => {
-      const res = await myFetch<SourceResponse>(`/s?id=${item.id}`)
-      return res
-    },
-    enabled: isInView,
-    staleTime: 1000 * 60 * 5,
-  })
-
-  const newsList = data?.items?.slice(0, 3)
-
-  return (
-    <div
-      ref={ref}
-      style={randomStyle}
-      className="group relative transition-all duration-500 ease-out
-                 rotate-[var(--random-rotate)] translate-x-[var(--random-x)] translate-y-[var(--random-y)]
-                 hover:rotate-0 hover:translate-x-0 hover:translate-y-0 hover:scale-110 hover:z-50"
-    >
-      {/* Instax Body */}
-      <div className="bg-white p-2 pb-8 shadow-xl shadow-black/50 relative overflow-hidden flex flex-col h-full transform-gpu">
-        {/* Glossy Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none z-10" style={{ mixBlendMode: "overlay" }} />
-
-        {/* Photo Area */}
-        <div className="bg-neutral-900 aspect-[3/4] w-full relative overflow-hidden mb-2 filter grayscale group-hover:grayscale-0 transition-all duration-500">
-          <div className="absolute inset-0 bg-[#1a1a1a]" />
-          <div className="absolute inset-0 bg-black/20" />
-          {" "}
-          {/* Dimmer */}
-
-          {/* Breaking News Overlay (If available) */}
-          {newsList && newsList.length > 0 && (
-            <div className="absolute inset-0 p-4 flex flex-col justify-center space-y-3">
-              {newsList.map(news => (
-                <a
-                  key={news.id}
-                  href={news.mobileUrl || news.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block text-xs leading-snug font-sans text-white/90 hover:text-yellow-300 transition-colors drop-shadow-md border-b border-white/10 last:border-0 pb-2 last:pb-0"
-                >
-                  {news.title}
-                </a>
-              ))}
-            </div>
-          )}
-
-          {isLoading && (
-            <div className="absolute inset-4 border border-white/10 animate-pulse rounded flex items-center justify-center">
-              <span className="i-ph-aperture-duotone text-white/20 text-2xl animate-spin" />
-            </div>
-          )}
-        </div>
-
-        {/* Dymo Label */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[90%] flex justify-center z-20">
-          <div className="bg-black text-white px-2 py-0.5 font-mono text-xs tracking-widest uppercase rounded-[2px] shadow-sm transform -rotate-1 border border-white/20 truncate text-center">
-            {item.name}
+          <div className="body-content">
+            {isLoading
+              ? <p>Loading...</p>
+              : isError
+                ? <p>Error</p>
+                : (
+                    <ul>
+                      {data?.items?.slice(10, 22).map(news => (
+                        <li key={news.id} className="mb-2">
+                          <a href={news.mobileUrl || news.url} target="_blank" rel="noreferrer" className="hover:text-[#c0392b]">
+                            {news.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
           </div>
         </div>
-
-        {/* Pin Action */}
-        <button
-          type="button"
-          onClick={toggleFocus}
-          className={$(
-            "absolute top-1 right-1 p-1 z-30 transition-all",
-            isFocused ? "text-yellow-400 opacity-100 drop-shadow-md" : "text-white opacity-0 group-hover:opacity-100 hover:text-yellow-300",
-          )}
-        >
-          <span className={$(isFocused ? "i-ph-star-fill" : "i-ph-star-duotone", "text-lg")} />
-        </button>
       </div>
     </div>
   )

@@ -30,6 +30,18 @@ export default defineConfig({
       },
     ],
   ],
+  theme: {
+    fontFamily: {
+      sans: "'Lato', sans-serif",
+      serif: "'Playfair Display', serif",
+    },
+    colors: {
+      "paper-light": "#f7f5f0", // 米白报纸色
+      "paper-dark": "#e0ded9", // 堆叠阴影颜色
+      "ink": "#2c2c2c", // 深灰墨色
+      "accent-red": "#c0392b", // 现代感的强调色（暗红）
+    },
+  },
   shortcuts: {
     "color-base": "color-neutral-800 dark:color-neutral-300",
     "bg-base": "bg-zinc-200 dark:bg-dark-600",

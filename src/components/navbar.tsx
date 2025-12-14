@@ -8,7 +8,7 @@ export function NavBar() {
   const currentId = useAtomValue(currentColumnIDAtom)
   return (
     <span className={$([
-      "flex p-3 rounded-2xl bg-primary/1 text-sm",
+      "flex p-0.5 rounded-2xl bg-primary/1 text-sm",
       "shadow shadow-primary/20 hover:shadow-primary/50 transition-shadow-500",
     ])}
     >

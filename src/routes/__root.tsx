@@ -1,11 +1,9 @@
 import "~/styles/globals.css"
 import "virtual:uno.css"
 import { Outlet, createRootRouteWithContext } from "@tanstack/react-router"
-import { TanStackRouterDevtools } from "@tanstack/router-devtools"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import type { QueryClient } from "@tanstack/react-query"
-import { isMobile } from "react-device-detect"
-import { Header } from "~/components/header"
+import { NavBar } from "~/components/navbar"
 import { GlobalOverlayScrollbar } from "~/components/common/overlay-scrollbar"
 import { Footer } from "~/components/footer"
 import { Toast } from "~/components/common/toast"
@@ -33,24 +31,12 @@ function RootComponent() {
     <>
       <GlobalOverlayScrollbar
         className={$([
-          !isMobile && "px-4",
           "h-full overflow-x-auto",
-          "md:(px-10)",
-          "lg:(px-24)",
         ])}
       >
-        <header
-          className={$([
-            "grid items-center py-4 px-5",
-            "lg:(py-6)",
-            "sticky top-0 z-10 backdrop-blur-md",
-          ])}
-          style={{
-            gridTemplateColumns: "50px auto 50px",
-          }}
-        >
-          <Header />
-        </header>
+        <div className="w-full flex justify-center sticky top-0 z-10 py-2 backdrop-blur-md">
+          <NavBar />
+        </div>
         <main className={$([
           "mt-2",
           "min-h-[calc(100vh-180px)]",
@@ -69,7 +55,7 @@ function RootComponent() {
       {import.meta.env.DEV && (
         <>
           <ReactQueryDevtools buttonPosition="bottom-left" />
-          <TanStackRouterDevtools position="bottom-right" />
+          {/* <TanStackRouterDevtools position="bottom-right" /> */}
         </>
       )}
     </>
