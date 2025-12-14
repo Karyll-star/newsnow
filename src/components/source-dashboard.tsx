@@ -46,16 +46,14 @@ function DrawingCanvas() {
   const [lines, setLines] = useAtom(linesAtom)
   const [currentLine, setCurrentLine] = useState<Line | null>(null)
 
-  if (!isDrawingMode) return null
-
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
-    setCurrentLine([{ x: e.clientX, y: e.clientY }])
+    setCurrentLine([{ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }])
   }
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.buttons !== 1 || !currentLine) return
-    setCurrentLine([...currentLine, { x: e.clientX, y: e.clientY }])
+    setCurrentLine([...currentLine, { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY }])
   }
 
   const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -71,12 +69,19 @@ function DrawingCanvas() {
     return `M ${firstPoint.x} ${firstPoint.y} ${restPoints.map(p => `L ${p.x} ${p.y}`).join(" ")}`
   }
 
+  const pointerEvents = isDrawingMode
+    ? {
+        onPointerDown: handlePointerDown,
+        onPointerMove: handlePointerMove,
+        onPointerUp: handlePointerUp,
+      }
+    : {}
+
   return (
     <svg
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      className="absolute inset-0 w-full h-full z-40"
+      {...pointerEvents}
+      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40"
+      style={{ width: 30000, height: 30000, pointerEvents: isDrawingMode ? "auto" : "none" }}
     >
       {lines.map((line, index) => (
         <path
@@ -89,7 +94,7 @@ function DrawingCanvas() {
           strokeLinejoin="round"
         />
       ))}
-      {currentLine && (
+      {isDrawingMode && currentLine && (
         <path
           d={getSvgPathFromLine(currentLine)}
           stroke="black"
@@ -247,7 +252,10 @@ export function SourceDashboard() {
         minScale={0.1}
         maxScale={2}
         limitToBounds={false}
-        panning={{ velocityDisabled: isDrawingMode }}
+        panning={{ disabled: isDrawingMode }}
+        zooming={{ disabled: isDrawingMode }}
+        pinch={{ disabled: isDrawingMode }}
+        doubleClick={{ disabled: isDrawingMode }}
         onTransformed={(ref, state) => setViewState(state)}
       >
         <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%" }}>
@@ -261,9 +269,9 @@ export function SourceDashboard() {
               />
             ))}
           </div>
+          <DrawingCanvas />
         </TransformComponent>
       </TransformWrapper>
-      <DrawingCanvas />
     </div>
   )
 }
